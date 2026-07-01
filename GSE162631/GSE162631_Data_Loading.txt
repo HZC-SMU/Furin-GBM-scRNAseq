@@ -1,0 +1,47 @@
+setwd("E:/Super LRP/Desktop/阳琴/GSE162631")
+
+# 读取每个样本（需确保文件名符合10X格式要求）
+read_control <- function(path, project_name) {
+  data <- Read10X(data.dir = path)
+  CreateSeuratObject(counts = data, project = project_name)
+}
+
+# 读取提供的样本
+R1_T <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R1_T",
+  "R1_T"
+)
+R2_N <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R2_N",
+  "R2_N"
+)
+R2_T <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R2_T",
+  "R2_T"
+)
+R3_N <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R3_N",
+  "R3_N"
+)
+R3_T <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R3_T",
+  "R3_T"
+)
+R4_N <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R4_N",
+  "R4_N"
+)
+R4_T <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R4_T",
+  "R4_T"
+)
+R1_N <- read_control(
+  "E:/Super LRP/Desktop/阳琴/GSE162631/文件/R1_N",
+  "R1_N"
+)
+
+# 合并所有样本
+mmRNA <- merge(R1_T, y = list(R2_N, R2_T, R3_N, R3_T, R4_N, R4_T, R1_N))
+saveRDS(mmRNA,"mmRNA4版本.rds")
+mmRNA=readRDS("mmRNA4版本.rds")
+getwd()

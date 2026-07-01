@@ -1,0 +1,92 @@
+　　####数据处理清洗
+　　####数据处理清洗
+　　####数据处理清洗
+　　HB.genes <- c("HBA1","HBA2","HBB","HBD","HBE1","HBG1","HBG2","HBM","HBQ1","HBZ")
+　　#HB.genes <- c("Hba1","Hba2","Hbb-bt","Hbd","Hbe1","Hbg1","Hbg2","Hbm","Hbq1","Hbz")
+　　HB_m <- match(HB.genes, rownames(mmRNA@assays$RNA)) 
+　　HB.genes <- rownames(mmRNA@assays$RNA)[HB_m] 
+　　HB.genes <- HB.genes[!is.na(HB.genes)] 
+　　mmRNA[["percent.mt"]] <- PercentageFeatureSet(mmRNA, pattern = "^MT-")
+　　mmRNA[["percent.HB"]]<-PercentageFeatureSet(mmRNA, features=HB.genes) 
+　　###过滤前绘制小提琴图查看细胞情况
+　　VlnPlot(mmRNA , features = c("nFeature_RNA", "nCount_RNA", "percent.mt","percent.HB"), ncol = 4)
+　　VlnPlot
+　　ggsave("vln_plot_before.pdf", plot = last_plot(), width = 10, height = 8)
+　　dev.off()
+　　VlnPlot(mmRNA , features = c("LRH1"), ncol = 1)
+　　###利用subset函数进行质量控制
+　　###根据nCount_RNA、nFeature_RNA 、percent.mt 、percent.rb筛选掉部分细胞。筛选范围可自行修改，最好是查看相应方向的文献
+　　# 标准化单细胞数据过滤（整合[[6]][[9]][[11]]）
+　　mmRNA <- subset(mmRNA, subset = 
+　　                  nCount_RNA >= 500 & nCount_RNA <= 50000 &       # UMI总数范围 [[6]][[13]][[15]]
+　　                  nFeature_RNA >= 250 & nFeature_RNA <= 5000 &    # 基因数范围 [[6]][[15]]
+　　                  percent.mt <= 15 &                             # 线粒体基因阈值 [[9]][[15]]
+　　                  percent.HB <= 1                               # 血红蛋白基因阈值 [[11]][[14]]
+　　)###再次绘制质量控制后的小提琴图
+　　VlnPlot(mmRNA , features = c("nFeature_RNA", "nCount_RNA", "percent.mt","percent.HB"), ncol = 4)
+　　ggsave("vln_plot_after.pdf", plot = last_plot(), width = 10, height = 8)
+dev.off()
+
+　　###数据标准化
+　　###默认使用LogNormalize方法
+　　mmRNA <- NormalizeData(mmRNA , scale.factor = 10000)
+　　
+　　###利用FindVariableFeatures函数寻找前2000个高边基因用于后续分析
+　　mmRNA <- FindVariableFeatures(mmRNA,selection.method = "vst",nfeatures = 2000)
+　　
+###数据缩放与归一化
+　　scale.genes <- VariableFeatures(mmRNA)
+　　mmRNA<-ScaleData(mmRNA,features =scale.genes)
+
+###PCA与T-SNE降维，时间可能较久
+　　mmRNA <- RunPCA(mmRNA,features = VariableFeatures(object = mmRNA))
+　　#mmRNA  <- Seurat::RunTSNE(mmRNA,dims = 1:10)
+　　mmRNA  <- Seurat::RunUMAP(mmRNA,dims = 1:10)
+　　###查看前30个结果
+　　print(mmRNA [["pca"]], dims = 1:30, nfeatures = 5)
+　　###查看前30个结果
+　　print(mmRNA [["pca"]], dims = 1:30, nfeatures = 5)
+　　
+　　###查看pca可视化结果，这里官网提供了几种图
+　　VizDimLoadings(mmRNA, dims = 1:4, reduction = "pca")##展示前面两个pc结果
+　　DimPlot(mmRNA, reduction = "pca", pt.size = 1)
+　　ggsave("DimPlot_PC1_PC2.pdf", width = 8, height = 6)
+　　
+####设置group??-------------
+####设置group??-------------
+####设置group??-------------
+table(mmRNA@meta.data$orig.ident)
+
+
+mmRNA@meta.data$group <- ifelse(
+  mmRNA$orig.ident == "Control", 
+  "Control", 
+  "GBM"
+)
+# 验证结果
+table(mmRNA@meta.data$group)
+  ###harmony去批次效应#########
+  ###harmony去批次效应#########
+  ###harmony去批次效应########
+  ###在分析的过程中，一些存在批次效应的细胞可能会导致高变基因的改变，因此需要通过harmony去批次，并重新鉴定高变基因
+  mmRNA_harmony <- RunHarmony(mmRNA, group.by.vars = "orig.ident")
+  # 使用LogNormalize确保数据转换
+  mmRNA_harmony <- NormalizeData(
+    mmRNA_harmony,
+    normalization.method = "LogNormalize",  # 关键参数 [[6]][[7]]
+    scale.factor = 10000
+  )
+  # 检测高变基因
+  mmRNA_harmony <- FindVariableFeatures(
+    mmRNA_harmony,
+    selection.method = "vst",
+    nfeatures = 2000
+  )
+
+  file_name <- "harmony_pca1.pdf"
+  pdf(file_name, width = 7.5, height = 6)
+  c2 <- DimPlot(mmRNA_harmony, reduction = "harmony") +
+    theme_classic() +
+    theme(panel.border = element_rect(fill = NA, color = "black", size = 0.5, linetype = "solid"),
+          legend.position = "right")
+  c2

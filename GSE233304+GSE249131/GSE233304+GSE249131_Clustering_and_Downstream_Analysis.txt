@@ -1,0 +1,928 @@
+# 执行弹性分析，并绘制肘部图
+pdf("after_harmony_ElbowPlot_pca.pdf", width = 5, height = 4)
+tryCatch({
+  ElbowPlot(mmRNA_harmony, ndims = 30, reduction = "pca")
+}, error = function(e) {
+  cat("PCA的肘部图发生错误：", e$message, "\n")
+})
+dev.off()
+dev.new()
+
+###聚类分析
+mmRNA_harmony <- FindNeighbors(mmRNA_harmony, dims = 1:5)###这里的1：10建议根据肘部图结果进行修改
+# 查看前5个细胞的类群ID
+head(Idents(mmRNA_harmony), 5)
+
+mmRNA_harmony=FindNeighbors(mmRNA_harmony, dims = 1:6, reduction = "harmony")####这里的1：10记得也要根据自己情况修改
+for (res in c(0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.8,1,1.2,1.5,2,2.5,3)) {
+  mmRNA_harmony=FindClusters(mmRNA_harmony, graph.name = "RNA_snn", resolution = res, algorithm = 1)}
+apply(mmRNA_harmony@meta.data[,grep("RNA_snn_res",colnames(mmRNA_harmony@meta.data))],2,table)
+
+p2_tree=clustree(mmRNA_harmony@meta.data, prefix = "RNA_snn_res.")
+p2_tree
+
+ggsave("cluster_of_tree1.pdf", plot = p2_tree, width =12, height =13)
+dev.off()
+###聚类
+mmRNA_harmony <- FindClusters(mmRNA_harmony, resolution = 0.4)###这里的revolution根据树图进行修改，数值越大，得到的cluster越多
+###查看前5个细胞的类群ID
+head(Idents(mmRNA_harmony), 5)
+table(mmRNA_harmony@meta.data$Celltype)
+
+###可视化
+# 执行UMAP降维
+mmRNA_harmony <- RunUMAP(mmRNA_harmony, dims = 1:6, reduction = "harmony")
+###对聚类后的UMAP图和tSNE图进行可视化
+# 创建UMAP图的PDF文件
+pdf(file = "After_cluster_UMAP.pdf", width = 7, height = 6)
+#pdf(file = "IPF_UMAP.pdf", width = 7, height = 6)
+DimPlot(mmRNA_harmony, label = TRUE, repel = TRUE, 
+        label.size = 4, pt.size = 0.5) + 
+  theme_classic() + 
+  theme(panel.border = element_rect(fill = NA, color = "black", size = 0.5, linetype = "solid"),
+        legend.position = "right")
+dev.off()
+dev.new()
+
+###创建umap图的PDF文件
+pdf(file = "After_cluster_TSEN.pdf", width = 7, height = 6)
+DimPlot(mmRNA_harmony, reduction = "tsne", label = T, label.size = 3.5, pt.size = 0.5) + 
+  theme_classic() + 
+  theme(panel.border = element_rect(fill = NA, color = "black", size = 0.5, linetype = "solid"),
+        legend.position = "right")
+dev.off()
+
+
+
+
+
+
+##FindAllMarkers----------
+##FindAllMarkers----------
+##FindAllMarkers----------
+这一步的作用是：找出每一cluster的主要表达基因，从而确定每个cluster的细胞名。
+  mmRNA_harmony.markers <- FindAllMarkers(
+    mmRNA_harmony, #mmRNA_harmony,Hu_SMC
+    only.pos = TRUE, 
+    min.pct = 0.25, 
+    logfc.threshold = 0.25,
+    group.by = "seurat_clusters"  # 若未设置 ident，则需显式指定
+  )
+  head(mmRNA_harmony.markers)
+  mmRNA_harmony.markers$pct.3 <- abs(mmRNA_harmony.markers$pct.1 - mmRNA_harmony.markers$pct.2)
+  head(mmRNA_harmony.markers)
+  
+###生成每个cluster的top10基因列表
+  top10 <- mmRNA_harmony.markers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = pct.3)
+  write.csv(top10, file = "top10FindAllMarkers.csv")#保存top15
+  write.csv(mmRNA_harmony.markers, file = "FindAllMarkers.csv")#保存全部
+
+
+
+# 初始化 Celltype 列，默认值为 "Unknown"
+mmRNA_harmony$Celltype <- "Unknown"
+
+# 根据最新的注释更新 Celltype
+mmRNA_harmony$Celltype[mmRNA_harmony$seurat_clusters %in% c(0, 2, 5, 6, 8)] <- "T"
+mmRNA_harmony$Celltype[mmRNA_harmony$seurat_clusters == 1] <- "NK"
+mmRNA_harmony$Celltype[mmRNA_harmony$seurat_clusters %in% c(3, 7)] <- "B"
+mmRNA_harmony$Celltype[mmRNA_harmony$seurat_clusters == 4] <- "Macrophages"
+
+#亚群????------------------------
+#亚群????------------------------
+#亚群????------------------------
+# 检查新分组变量的结果
+table(mmRNA_harmony@meta.data$Celltype)
+table(mmRNA_harmony@meta.data$orig.ident)
+table(mmRNA_harmony@meta.data$group)
+saveRDS(Hu_SMC,"Hu_SMC4版本.rds")
+Hu_SMC=readRDS("Hu_SMC4版本.rds")
+
+saveRDS(mmRNA_harmony,"scRNA_harmony4版本.rds")
+mmRNA_harmony=readRDS("scRNA_harmony4版本.rds")
+
+saveRDS(Hu_SMC,"Hu_SMC4版本巨噬细胞.rds")
+Hu_SMC=readRDS("Hu_SMC4版本巨噬细胞.rds")
+
+#取巨噬细胞进行亚群细分
+Hu_SMC <- mmRNA_harmony[,mmRNA_harmony$Celltype %in% c('B Cells')]#New_celltype2,#Celltype
+dim(Hu_SMC)
+
+# 查看 orig.ident 列（假设 Hu_SMC 是一个 Seurat 对象）
+table(Hu_SMC@meta.data$Celltype)
+table(Hu_SMC@meta.data$group)
+# 创建新列 "group"-------------
+# 创建新列 "group"-------------
+# 创建新列 "group"-------------
+mmRNA_harmony@meta.data$group <- ifelse(
+  grepl("T", mmRNA_harmony@meta.data$orig.ident), 
+  "Tumor", 
+  "Control"
+)
+# 查看结果（可选）
+table(Hu_SMC@meta.data$orig.ident)
+table(Hu_SMC@meta.data$group)
+
+
+# 提取 orig.ident 的前缀作为 group1
+Hu_SMC@meta.data$group1 <- sapply(strsplit(Hu_SMC@meta.data$orig.ident, "_"), "[[", 1)
+unique(Hu_SMC@meta.data$group1)
+
+#走基本降维聚类分群流程
+#Hu_SMC <- CreateSeuratObject(counts = Hu_SMC@assays$RNA$counts,
+                             #meta.data = Hu_SMC@meta.data[,1:4])
+
+Hu_SMC <- RunHarmony(Hu_SMC, group.by.vars = "orig.ident")###harmony
+Hu_SMC <- NormalizeData(Hu_SMC,normalization.method = "LogNormalize",
+                        scale.factor = 1e4)
+GetAssay(Hu_SMC,assay = "RNA")
+Hu_SMC <- FindVariableFeatures(Hu_SMC,
+                               selection.method = "vst",nfeatures = 2000)
+
+Hu_SMC <- ScaleData(Hu_SMC)
+Hu_SMC <- RunPCA(object = Hu_SMC,pc.genes = VariableFeatures(Hu_SMC))
+
+
+
+tryCatch({
+  ElbowPlot(Hu_SMC, ndims = 30, reduction = "pca")
+}, error = function(e) {
+  cat("PCA的肘部图发生错误：", e$message, "\n")
+})
+###聚类分析
+Hu_SMC <- FindNeighbors(Hu_SMC, dims = 1:3)###这里的1：10建议根据肘部图结果进行修改
+# 查看前5个细胞的类群ID
+head(Idents(Hu_SMC), 5)
+
+Hu_SMC=FindNeighbors(Hu_SMC, dims = 1:5, reduction = "harmony")####这里的1：10记得也要根据自己情况修改
+for (res in c(0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.8,1,1.2,1.5,2,2.5,3)) {
+  Hu_SMC=FindClusters(Hu_SMC, graph.name = "RNA_snn", resolution = res, algorithm = 1)}
+apply(Hu_SMC@meta.data[,grep("RNA_snn_res",colnames(Hu_SMC@meta.data))],2,table)
+
+p2_tree=clustree(Hu_SMC@meta.data, prefix = "RNA_snn_res.")
+p2_tree
+dev.off()
+ggsave("cluster_of_tree_巨噬细胞亚群.pdf", plot = p2_tree, width =12, height =13)
+
+###聚类
+Hu_SMC <- FindClusters(Hu_SMC, resolution = 0.3)###这里的revolution根据树图进行修改，数值越大，得到的cluster越多
+# 提取 FindNeighbors 的 dims（基于 Harmony 的示例）
+Hu_SMC@commands$FindNeighbors.RNA.pca@params$dims
+# 提取 FindNeighbors 的 dims（基于 Harmony 的示例）
+Hu_SMC@commands$FindNeighbors.RNA.harmony@params$dims
+# 提取 FindClusters 的 resolution
+Hu_SMC@commands$FindClusters@params$resolution
+###查看前5个细胞的类群ID
+head(Idents(Hu_SMC), 5)
+table(Hu_SMC@meta.data$group)
+
+###可视化
+# 执行UMAP降维
+  Hu_SMC <- RunUMAP(Hu_SMC, dims = 1:4, reduction = "harmony")#, neighbors = 50，增加PCA纬度dim，会让亚群分的更开
+# 执行tSNE降维
+#mmRNA_harmony <- RunTSNE(mmRNA_harmony, dims = 1:10, reduction = "harmony")
+Idents(Hu_SMC)='seurat_clusters'#New_celltype2#Celltype
+
+###对聚类后的UMAP图和tSNE图进行可视化
+###查看前5个细胞的类群ID
+head(Idents(Hu_SMC), 5)
+# 定义颜色向量（默认颜色基础上修改第5群）
+cluster_colors <- c("#5D9BBE", "#F5B375", "#C0937E", "red", "#67A59B", 
+                    "#A1156D", "#4A9D47", "#F19294", "#A4D38E")  #C0137E#A4D38E
+
+
+# 创建UMAP图的PDF文件
+pdf(file = "After_cluster_B细胞亚群UMAP.pdf", width = 7, height = 6)
+# 绘制图形并应用颜色
+DimPlot(Hu_SMC, label = TRUE, repel = TRUE, 
+        label.size = 5, pt.size = 0.5, 
+        cols = cluster_colors) +  # 指定自定义颜色
+  theme_classic() + 
+  theme(panel.border = element_rect(fill = NA, color = "black", size = 0.5, linetype = "solid"),
+        legend.position = "right")
+dev.off()
+
+# 创建UMAP图的PDF文件
+pdf(file = "After_cluster_亚群UMAP2.pdf", width = 7, height = 6)
+#pdf(file = "IPF_UMAP.pdf", width = 7, height = 6)
+DimPlot(Hu_SMC, label = TRUE, repel = TRUE, 
+        label.size = 5, pt.size = 0.5) + 
+  theme_classic() + 
+  theme(panel.border = element_rect(fill = NA, color = "black", size = 0.5, linetype = "solid"),
+        legend.position = "right")
+dev.off()
+dev.new()
+
+
+
+cluster_colors <- c("black", "blue", "green", "red")  
+plot_cell_annotation <- DimPlot(
+  object = Hu_SMC, 
+  reduction = "umap",
+  group.by = "seurat",      # 使用 Celltype 分组颜色
+  label = TRUE,               # 显示每个 cluster / celltype 的标签
+  label.size = 4,             # 标签文字大小
+  repel = TRUE,                # 防止标签重叠
+  cols = cluster_colors
+) + 
+  ggtitle("Updated Cell Annotation on UMAP")
+
+# 展示图形
+print(plot_cell_annotation)
+
+ggsave("umap_group.pdf", plot = plot_cell_annotation, width = 6, height = 6)
+dev.new()
+####umap，split，by，group
+cluster_colors <- c("#5D9BBE", "#F5B375", "red", "#66A61E", "blue")  
+umap_combined <- DimPlot(
+  Hu_SMC, 
+  reduction = "umap", 
+  label = TRUE, 
+  split.by = "group",
+  group.by = "seurat_clusters",
+  combine = TRUE,  # 将不同组合并到一张图中，颜色区分 group
+  label.size = 5,
+  cols = cluster_colors
+)
+
+print(umap_combined)
+ggsave("umap_split.pdf", plot = umap_combined, width = 12, height = 8)
+
+
+
+
+  ########轨迹分析monocle2??----------------
+  ########轨迹分析monocle2??----------------
+  ########轨迹分析monocle2??----------------
+  #设置工作目录为存储数据文件夹的前一个文件夹的目录
+  #加载包
+  library(Seurat)
+  library(tidyverse)
+  library(dplyr)
+  library(patchwork)
+  library(harmony)
+  library(devtools)
+  library(harmony)
+  library(cowplot)
+  library(gridExtra)
+  library(ggplot2)
+  library(patchwork)
+  library(reshape2)
+  library(Seurat)
+  library(tidyverse)
+  library(data.table)
+  library(magrittr)
+  library(RColorBrewer)
+  library(scran)
+  library(HSMMSingleCell)
+  library(Biobase)
+  library(ggsci)
+  library(ggpubr)
+  library(monocle)
+  library(cowplot)
+  #library(monocle3)
+
+  ##设置随机种子以便复现
+  set.seed(12345)
+  table(Hu_SMC$seurat_clusters)
+  table(Hu_SMC$Celltype)
+  Keratinocytes
+  ############################################
+  # 初始化 Celltype 列，默认值为 "Unknown"
+  Hu_SMC$Celltype <- "Unknown"
+  
+  # 更新 Celltype 根据 seurat_clusters
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(0)] <- "B cells_0"
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(1)] <- "B cells_1"
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(2)] <- "B cells_2"
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(3)] <- "B cells_3"
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(4)] <- "B cells_4"
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(5)] <- "B cells_5"
+  Hu_SMC$Celltype[Hu_SMC$seurat_clusters %in% c(6)] <- "B cells_6"
+  
+  table(Hu_SMC$Celltype)
+  table(Hu_SMC$seurat_clusters)
+  
+  mmRNA_harmony <- Hu_SMC
+  
+  Idents(Hu_SMC)='Celltype'
+  
+  
+  ##############################
+  # 将RNA计数数据转换为稀疏矩阵格式，以提高内存效率
+  Matrix <- as(as.matrix(mmRNA_harmony@assays$RNA@counts), 'sparseMatrix')
+  
+  # 提取细胞的元数据，用于后续分析
+  cell_data <- mmRNA_harmony@meta.data
+  View(cell_data)
+  # 创建基因数据框，包含基因名称信息
+  gene_data <- data.frame(gene_short_name = row.names(mmRNA_harmony), row.names = row.names(mmRNA_harmony))
+  View(gene_data)
+  
+  # 创建细胞表型数据框，用于存储细胞的元数据信息
+  pd <- new('AnnotatedDataFrame', data = cell_data)
+  
+  # 创建特征数据框，用于存储基因的相关信息
+  fd <- new('AnnotatedDataFrame', data = gene_data)
+  
+  # 创建CellDataSet对象，用于存储和处理单细胞RNA测序数据
+  {
+    cds <- newCellDataSet(Matrix,
+                          phenoData = pd,       
+                          featureData = fd,     
+                          lowerDetectionLimit = 0.5,  
+                          expressionFamily = negbinomial.size())  
+    
+    cds <- estimateSizeFactors(cds)
+    
+    cds <- estimateDispersions(cds)
+  }
+  cds <- detectGenes(cds, min_expr = 0.1) 
+  View(gene_data)#此时有31328个基因
+
+  expressed_genes <- row.names(subset(fData(cds),
+                                      num_cells_expressed >= 10)) 
+  
+diff1 <- differentialGeneTest(cds[expressed_genes,],fullModelFormulaStr="~Celltype",cores=16)  
+
+  head(diff1)
+  deg <- subset(diff1, qval < 0.0000001) #选出5099个基因
+  deg <- deg[order(deg$qval,decreasing=F),]
+  head(deg)
+  
+  write.table(deg,file="拟时序cds4.DEG.xls",col.names=T,row.names=F,sep="\t",quote=F)
+  deg <- read.table("拟时序cds4.DEG.xls", header = TRUE, sep = "\t", quote = "", check.names = FALSE)
+  ordergene <- rownames(deg) 
+  #太多的话挑一部分
+  ordergene <- row.names(deg)[order(deg$qval)][1:5000]
+  cds4 <- setOrderingFilter(cds, ordergene)
+  
+  pdf("cds41.pdf")
+  plot_ordering_genes(cds4)
+  dev.off()
+  
+  plot4 <- plot_ordering_genes(cds4)
+  
+  library(gridExtra)
+  # 将四个图拼在一起，形成一个2x2的布局
+  combined_plot <- grid.arrange(plot1, plot2, plot3, plot4, ncol = 2)
+  # 导出到PDF文件
+  ggsave("combined_plot.pdf", plot = combined_plot, width = 10, height = 10)
+  dev.off()
+  
+  ##选择第四种
+  cds <- setOrderingFilter(cds, ordergene)#第4种
+  plot_ordering_genes(cds)
+  
+  
+  gc()
+  cds <- reduceDimension(cds, 
+                         reduction_method = "DDRTree",  # 降维算法
+                         method = "ls",                 # 残差模型方法（选 "ls" 或 "robust"）
+                         #residualModelFormulaStr = "~orig.ident",
+                         verbose = FALSE)
+  
+  gc()
+  ##不同的方法，耗费的时间会不一样，基因和细胞越多，耗费的内存越大，也容易崩溃
+  cds <- orderCells(cds)
+
+  
+  gc()
+####运行完orderCells，保存数据####
+save.image(file = "B cell monocle2.RData") 
+gc()
+# State
+plot1
+p1 = plot_cell_trajectory(cds, color_by = "State") +
+  theme(
+　　text = element_text(size = 17), 
+　　legend.position = "right",      
+    legend.direction = "vertical"   
+  ) +
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  ) +                 
+  theme_dr(xlength = 0.3,               
+           ylength = 0.3,              
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  
+  theme(aspect.ratio = 1,              
+        panel.grid = element_blank())  
+p1
+
+ggsave(p1,filename = '拟时序1by_state.pdf', width = 12, height = 9)
+dev.off()
+
+# 可视化细胞类型
+p2 = plot_cell_trajectory(cds, color_by = "Celltype") +
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  ) +                 
+  theme_dr(xlength = 0.3,               
+           ylength = 0.3,              
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  
+  theme(aspect.ratio = 1,              
+        panel.grid = element_blank())  
+
+p2
+dev.new()
+dev.off()
+
+# 
+p3 <- plot_cell_trajectory(cds, color_by = "Pseudotime") +
+  scale_color_gradientn(
+    colors = c("#2E3192", "#dddddc", "#FF0000")
+  ) +
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  ) +                 
+  theme_dr(xlength = 0.3,               
+           ylength = 0.3,              
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  
+  theme(aspect.ratio = 1,              
+        panel.grid = element_blank())  
+
+
+# 显示图形
+p3
+ggsave(p3, filename = '拟时序3_发育轨迹.pdf', width = 12, height = 9)
+dev.off()
+
+# Monocle不知道哪个是开始的起始点，所以我们经常需要使用root_state参数
+# 结合前面的P1的图来选取起始点。根据state
+cds <- orderCells(cds, root_state = 2)#??看state图的clusters，不是celltype
+plot_cell_trajectory(cds) # 指定分化起始点，排序细胞
+
+# 重新绘制
+p4 =   plot_cell_trajectory(cds, color_by = "Pseudotime") +
+  scale_color_gradientn(
+    colors = c("#2E3192", "#dddddc", "#FF0000")
+  )+
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  ) +                 
+  theme_dr(xlength = 0.3,               # 设置迷你坐标轴的X轴长度为0.3（控制迷你坐标轴大小）
+           ylength = 0.3,              # 设置迷你坐标轴的Y轴长度为0.3
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  # 设置迷你坐标轴箭头样式（长度0.1英寸，闭合类型）
+  theme(aspect.ratio = 1,              # 设置图形纵横比为1:1（保持UMAP图为正方形）
+        panel.grid = element_blank())  # 移除背景网格线（使图形更简洁专业）
+p4
+
+p4 =   plot_cell_trajectory(cds, color_by = "Pseudotime") +
+  scale_color_gradientn(
+    colors = c("#134b87", "#dddddc", "#b2182b")#134b87", "#dddddc", "#b2182b
+  )+
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  ) +                 
+  theme_dr(xlength = 0.3,               # 设置迷你坐标轴的X轴长度为0.3（控制迷你坐标轴大小）
+           ylength = 0.3,              # 设置迷你坐标轴的Y轴长度为0.3
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  # 设置迷你坐标轴箭头样式（长度0.1英寸，闭合类型）
+  theme(aspect.ratio = 1,              # 设置图形纵横比为1:1（保持UMAP图为正方形）
+        panel.grid = element_blank())  # 移除背景网格线（使图形更简洁专业）
+p4
+ggsave(p4, filename = '拟时序4.pdf', width = 12, height = 9)
+dev.off()
+########P1和P2结合
+p2+p3
+dev.off()
+p1+p2+p4
+
+dev.off()
+# 拆分绘制
+p5 = plot_cell_trajectory(cds, color_by = "Celltype") +
+  facet_wrap(~Celltype, nrow = 2) + 
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  )
+
+p5
+ggsave(p5, file = '拟时序5.pdf', width = 22, height = 20)
+dev.off()
+dev.new()
+#### 换种形式绘制，主要修改下面的 state
+p6 = plot_complex_cell_trajectory(cds, x = 1, y = 2, color_by = "Celltype") +
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  )
+
+p6
+ggsave(p6, file = '拟时序6.pdf', width = 12, height = 9)
+
+dev.off()
+
+p2+p6
+dev.off()
+# 可视化目标基因??
+# 可视化目标基因??
+# 可视化目标基因??
+blast_genes <- row.names(subset(fData(cds),gene_short_name %in% c("TYK2")))
+plot_genes_jitter(cds[blast_genes,],grouping = "State",min_expr = 0.1)
+ggsave(filename = '目标基因1.pdf')
+dev.off()
+plot_genes_jitter(cds[blast_genes,],grouping = "Celltype",min_expr = 0.1)# 
+ggsave(filename = '拟时序YWHAZ_byCelltype.pdf')
+dev.off()
+dev.new()
+##自定义颜色
+# 自定义颜色
+cluster_colors <- c("#EDCFD8", "#CBE0A7", "#c0504d", "#C98F96", "#9AD1C3", 
+                    "#4f80bd", "#EFB27C", "#696969", "#67A59B", "#C0937E",
+                    "#D9D9D9", "#F4B400") 
+cluster_colors <- c("#00436d", "#6b8aa6", "#D9D9D9", "#a61e1e", "#550000", #e27968#a61e1e
+                    "#e27968", "#084594", "#696969", "#67A59B", "#C0937E",
+                    "#D9D9D9", "#F4B400") 
+# 获取所有不同的Celltype和State，确保颜色数量与之匹配
+celltype_levels <- unique(cds$Celltype)
+celltype_levels
+# 提取数字部分并排序
+celltype_levels_sorted <- celltype_levels[order(as.numeric(sub(".*_", "", celltype_levels)))]
+# 查看排序结果
+celltype_levels_sorted
+
+state_levels <- unique(cds$State)
+state_levels
+# 提取数字部分并排序
+state_levels_sorted <- state_levels[order(as.numeric(sub(".*_", "", state_levels)))]
+# 查看排序结果
+state_levels_sorted
+             
+             
+# 绘制按 Celltype 着色的轨迹
+p7 <- plot_cell_trajectory(cds, color_by = "Celltype") +
+  scale_color_manual(values = setNames(cluster_colors[1:length(celltype_levels_sorted)], celltype_levels_sorted)) +
+  theme(
+    text = element_text(size = 17),              # 图形整体基础字体大小
+    legend.position = "right",
+    legend.direction = "vertical",
+    
+    # -------- 这里是针对右边注释的修改 --------
+    legend.title = element_text(size = 24),      # 放大标题 "Celltype" 的字号 (例如设为 24)
+    legend.text = element_text(size = 20),       # 放大标签 "Macrophages_0" 等的字号 (例如设为 20)
+    legend.key.size = unit(1.0, "cm")            # 放大图例前面的颜色圆点/方块的大小 (例如设为 1厘米)
+    # ----------------------------------------
+  ) +                 
+  theme_dr(xlength = 0.3,               
+           ylength = 0.3,              
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  
+  theme(aspect.ratio = 1,              
+        panel.grid = element_blank())  
+
+p7
+
+# 保存图像
+ggsave(p7, file = '拟时序7by_Celltype.pdf', width = 12, height = 9)
+dev.off()
+
+# 绘制按 State 着色的轨迹
+p8 <- plot_cell_trajectory(cds, color_by = "State") +
+  scale_color_manual(values = setNames(cluster_colors[1:length(state_levels_sorted)], state_levels_sorted)) +
+  theme(
+    text = element_text(size = 17),
+    legend.position = "right",
+    legend.direction = "vertical"
+  )
+
+p8
+# 保存图像
+ggsave(p8, file = '拟时序8by_State.pdf', width = 12, height = 9)
+dev.off()
+
+p7|p8
+dev.off()
+#画沿时间轴的细胞密度图
+# 画沿时间轴的细胞密度图
+df <- pData(cds) 
+
+ggplot(df, aes(Pseudotime, fill = Celltype)) +  # 去掉了 aes 里的 color 映射，直接在下面设置
+  geom_density(bw = 0.5, 
+               color = NA,      # ?? 关键：设置边框颜色为 NA，彻底去掉黑色边框
+               alpha = 0.8) +   # 建议 alpha 稍微调低一点（如0.8），可以看到重叠部分的色彩
+  scale_fill_manual(values = cluster_colors) +
+  theme_classic2() +                 
+  theme_dr(xlength = 0.3,               
+           ylength = 0.3,              
+           arrow = grid::arrow(length = unit(0.1, "inches"), type = "closed")) +  
+  theme(aspect.ratio = 1,              
+        panel.grid = element_blank())  
+
+
+
+
+#####平均值热图------------
+#####平均值热图------------
+#####平均值热图------------
+library(readxl)
+library(ComplexHeatmap)
+top5 <- read_excel("B细胞亚群热图基因.xls", sheet = 1)
+table(top5$gene)
+mmRNA_harmony <- Hu_SMC
+#计算每个细胞类型（Celltype）中指定基因（top5$gene）的平均表达量。
+gene_cell_exp <- AverageExpression(mmRNA_harmony,
+                                   features = top5$gene,
+                                   group.by = 'seurat_clusters',
+                                   slot = 'data')
+#gene_cell_exp现在是个列表（list）
+gene_cell_exp$RNA
+#将上一步输出的矩阵（matrix）转换为数据框（data frame），便于后续处理和可视化。
+gene_cell_exp <- as.data.frame(gene_cell_exp$RNA)
+head(gene_cell_exp)
+#把 gene_cell_exp 的列名（比如 "T cell", "Macrophage" 等）作为一列，命名为 class
+df <- data.frame(class = colnames(gene_cell_exp))
+head(df)
+#设置行名为列名
+rownames(df) <- colnames(gene_cell_exp)
+head(df)
+##创建顶部注释对象
+top_anno <- HeatmapAnnotation(
+  df = df,                         # 注释数据框
+  border = TRUE,                  # 添加边框
+  show_annotation_name = FALSE,   # 不显示注释名称（即不显示 "class"）
+  gp = gpar(col = 'black'),       # 边框颜色为黑色
+  col = list(
+    class = c(
+        '0' = "#b0d9f9",
+        '1' = "#86c1b9",
+        '2' = "#f3e87a",
+        '3' = "#ffa0a0",
+        '4' = "#CBE0A7",
+        '5' = "#F7C2CD",
+        '6' = "#8ea8c3"
+    )  # 删除末尾可能多余的逗号
+  )
+head(top_anno)
+
+
+# 数据标准化缩放
+marker_exp <- t(scale(t(gene_cell_exp), scale = TRUE, center = TRUE))
+unique(rownames(gene_cell_exp))
+unique(rownames(marker_exp))
+
+# 绘制热图
+Heatmap(marker_exp,
+        cluster_rows = FALSE,  # 不对行进行聚类
+        cluster_columns = FALSE,  # 不对列进行聚类
+        show_column_names = FALSE,  # 不显示列名
+        show_row_names = TRUE,  # 显示行名
+        column_title = NULL,  # 不设置列标题
+        heatmap_legend_param = list(title=' '),  # 图例标题为空
+        col = colorRampPalette(c(
+          "#053061",  # 最深蓝色
+          "#134b87",  # 深蓝色
+          "#327db7",  # 较深蓝色
+          "#6fafd2",  # 一般蓝色
+          "#c7e0ed",  # 浅蓝色
+          "#fbd2bc",   # 浅粉色
+          "#feab88",  # 浅红色/偏粉色
+          "#b71c2c",  # 一般红色
+          "#8b0824",  # 较深红色
+          "#6a0624"   # 最深红色
+        ))(100),  # 设置颜色渐变
+        border = 'black',  # 设置单元格边框颜色
+        rect_gp = gpar(col = "black", lwd = 1),  # 设置分隔线样式
+        row_names_gp = gpar(fontsize = 10, fontface = "italic"),  # 设置行名字体大小和样式为斜体！！
+        column_names_gp = gpar(fontsize = 10),  # 设置列名字体大小（即使不显示）
+        top_annotation = top_anno)  # 顶部注释
+dev.new()
+dev.off()
+
+
+col_cluster <- setNames(c(
+  rep("#5D9BBE",5), ##("#5D9BBE", "#F5B375", "red", "#66A61E", "blue")
+  rep("#F5B375",5), 
+  rep("red",5), 
+  rep("#66A61E",5), 
+  rep("blue",5)
+  ), 
+  rownames(marker_exp))
+
+row_info = rowAnnotation(
+  foo = anno_text(
+    rownames(marker_exp),
+    location = 0,
+    just = "left",
+    gp = gpar(
+      fill = col_cluster,
+      col = "black",
+      fontface = "italic"  # 添加这一行！把基因名字改成斜体！
+    ),
+    width = max_text_width(rownames(marker_exp)) * 1.2
+  )
+)
+
+Heatmap(marker_exp,
+        cluster_rows = FALSE,  # 不对行进行聚类
+        cluster_columns = FALSE,  # 不对列进行聚类
+        show_column_names = T,  # 显示列名
+        column_names_side = "top",  # ? 修改这里！注意复数形式
+        show_row_names = FALSE,  # 不显示行名
+        column_title = NULL,  # 不设置列标题
+        heatmap_legend_param = list(title=' '),  # 图例标题为空
+        col = colorRampPalette(c(
+          "#053061",  # 最深蓝色
+          "#134b87",  # 深蓝色
+          "#327db7",  # 较深蓝色
+          "#6fafd2",  # 一般蓝色
+          "#c7e0ed",  # 浅蓝色
+          "#fbd2bc",   # 浅粉色
+          "#feab88",  # 浅红色/偏粉色
+          "#b71c2c",  # 一般红色
+          "#8b0824",  # 较深红色
+          "#6a0624"   # 最深红色
+        ))(100),  # 设置颜色渐变
+        border = 'black',  # 设置单元格边框颜色
+        rect_gp = gpar(col = "black", lwd = 1),  # 设置分隔线样式
+        row_names_gp = gpar(fontsize = 10, fontface = "italic"),   # 设置行名字体大小和样式为斜体
+        column_names_gp = gpar(fontsize = 12, rotation = 90),  # 设置列名字体大小、角度和对齐方式
+        left_annotation = row_info,  # 将基因信息作为左侧注释
+        top_annotation = top_anno)  # 顶部注释
+
+
+
+
+
+  #####多基因，两组对比小提琴图------------------------
+  #####多基因，两组对比小提琴图------------------------
+  #####多基因，两组对比小提琴图------------------------
+  #??提取细胞
+  AMs <- subset(
+    Hu_SMC,
+    subset = Celltype == "3"  # 对应seurat_clusters 5,8,15 [[10]]
+  )
+  mmRNA_harmony4 <- AMs#mmRNA_harmony，Hu_SMC
+  table(mmRNA_harmony4$group)
+  # 1. 提取所需数据（原始计数，非log值）
+  # 注意：这里使用counts slot确保是原始表达量
+  gene_list <- c("CD5", "CD1D", "CD9", "CD24", "CD27", "CD38", "NT5E", "ENTPD1", "SDC1",   # CD138 = SDC1，CD39 = ENTPD1，CD73 = NT5E
+                 "GZMB", "FASLG", "CD274", "LAG3", "HAVCR2", "IDO1", "TIGIT",
+                 "IL2RA", "CD80", "CD86", "CD40", "ICOS")  # 
+  gene_list <- c("IL27", "IL10", "IL12A", "EBI3", "TGFB1", "TGFB2", "TGFB3")
+  gene_list <- c("IL6", "IFNG", "IL1B")
+  gene_list <- c("CD5", "CD1D", "CD9", "CD38", "ENTPD1",   # CD138 = SDC1，CD39 = ENTPD1，CD73 = NT5E
+                 "CD274", "LAG3", "HAVCR2", "IDO1", "TIGIT",
+                 "IL2RA", "CD86")  # 假设 ISOSL 是 ICOS 的笔误
+  
+  gene_list <- c("LAG3", "PDCD1", "CD274", "CTLA4")
+  
+  gene_list <- c("IFI16", "EFCAB7", "CEP85", "IFI44", "B3GNT2", "LMO2", "HK2", "SMYD5")
+  
+  gene_list <- c("CD5", "CD1D", "CD9", "CD38", "ENTPD1",   # CD138 = SDC1，CD39 = ENTPD1，CD73 = NT5E
+                 "CD274", "LAG3", "HAVCR2", "IDO1", "TIGIT",
+                 "IL2RA", "CD86")  # 假设 ISOSL 是 ICOS 的笔误
+  
+  expr_matrix <- GetAssayData(
+    mmRNA_harmony4, 
+    assay = "RNA", 
+    layer = "counts",  # 关键：使用原始计数
+    slot = "data"
+  )[gene_list, ]
+  head(expr_matrix)
+  # 2. 转换为长格式数据框
+  df <- as.data.frame(t(expr_matrix))
+  df$cell <- rownames(df)
+  df$group <- mmRNA_harmony4$group  # 添加组别信息
+  head(df)
+  
+  df_long <- df %>%
+    pivot_longer(
+      cols = all_of(gene_list),
+      names_to = "Gene",
+      values_to = "Expression"
+    ) %>%
+    mutate(
+      Gene = factor(Gene, levels = gene_list),  # 保持基因顺序
+      group = factor(group, levels = c("Control", "GBM"))  # 确保Control在前
+    )
+  head(df_long)
+  # 3. 创建自定义颜色映射
+  gene_colors <- c("Control" = "#4E79A7", "GBM" = "#E15759")  # 蓝色=Control, 红色=GBM
+  
+  # 4. 绘制单图并排小提琴图
+  # 创建基础绘图对象：指定X轴(基因)、Y轴(表达值)、填充颜色(组别)
+  p <- ggplot(df_long, aes(x = Gene, y = Expression, fill = group)) +
+    
+    # 添加小提琴图层：展示每个基因在Control/GBM组的表达分布
+    geom_violin(
+      position = position_dodge(0.8),  # 将Control/GBM并排显示(0.8控制间距)
+      width = 0.7,                     # 小提琴宽度(0-1之间)
+      alpha = 0.8,                     # 透明度(0完全透明,1不透明)
+      scale = "width"                  # 使不同基因的宽度可比(避免高表达基因视觉主导)
+    ) +
+    
+    # 添加箱线图层：叠加在小提琴图上显示统计量
+    #geom_boxplot(
+    #width = 0.2,                     # 箱线图宽度(比小提琴窄)
+    #position = position_dodge(0.8),  # 与小提琴图对齐
+    #outlier.shape = NA,              # 不显示离群点(避免杂乱)
+    #alpha = 0.7                      # 箱线图透明度
+    #) +
+    # ===== 新增：添加散点图层 (每个细胞的表达值) =====
+  #geom_jitter(
+  #  position = position_jitterdodge(  # 关键：实现并排抖动
+  #    dodge.width = 0.8,              # 与小提琴图相同的并排间距
+  #    jitter.width = 0.15,            # 水平抖动范围(避免点重叠)
+  #   jitter.height = 0               # 垂直方向不抖动(保持Y值准确)
+  # ),
+  # aes(color = group),               # 将点颜色映射到组别
+  # size = 0.8,                       # 点的大小(严格按要求设为0.8)
+  # alpha = 0.6,                      # 透明度(避免点过多时视觉杂乱)
+  # show.legend = FALSE               # 不显示点图例(避免与填充图例重复)
+  #)  +
+  # 必须添加这行才能应用颜色
+  # scale_color_manual(values = gene_colors) +  # 控制点的颜色（散点图）
+  # scale_fill_manual(values = gene_colors) +   # 控制填充色（小提琴图）
+  
+  #添加均值点：用红色点标记组内平均表达水平
+  #stat_summary(
+  #fun = mean,                      # 计算平均值
+  #geom = "point",                  # 用点表示
+  #size = 2.5,                      # 点的大小
+  #color = "red",                   # 红色标记均值
+  #position = position_dodge(0.8)   # 与小提琴图对齐
+  #) +
+  
+  # 自定义填充颜色：Control=蓝色, GBM=红色
+  scale_fill_manual(values = gene_colors) +
+    
+    # 设置坐标轴标签
+    xlab("B Cluster 2") +                    # X轴标题(基因名称)
+    ylab("Expression (Raw Counts)") +  # Y轴标题(原始表达值)
+    theme_minimal(base_size = 12) +    # 使用简约主题(基础字体大小12pt)
+    
+    # 美化图表细节
+    theme(
+      # 移除所有网格线（包括X/Y轴主次网格线）
+      panel.grid.major = element_blank(),   # 移除主网格线（默认是粗线）
+      panel.grid.minor = element_blank(),   # 移除次网格线（默认是细线）
+      
+      axis.text.x = element_text(           # X轴标签样式
+        angle = 0,                         # 标签倾斜15度(避免重叠)
+        hjust = 1,                          # 水平对齐方式(1=右对齐)
+        size = 11,                          # 字体大小
+        color = "black"                     # 字体颜色
+      ),
+      legend.position = "top",             # 图例放在顶部
+      legend.title = element_blank(),      # 移除图例标题
+      legend.text = element_text(face = "bold"),  # 图例文字加粗
+      plot.margin = margin(10, 10, 10, 10) # 图表边距(上右下左)
+    ) +
+    
+    # 添加组别说明文字(在图表底部)
+    theme(
+      caption = element_text(             # 说明文字样式
+        hjust = 0,                        # 左对齐
+        face = "italic",                  # 斜体
+        color = "gray30"                  # 灰色文字
+      )
+    )
+  # 手动计算显著性
+  
+  # 5. 打印图形
+  print(p)
+
+
+
+
+
+mmRNA_harmony2 <- subset(
+    Hu_SMC,#mmRNA_harmony2,Hu_SMC
+    subset = Celltype == "3"#New_celltype2,Celltype，#Hu_SMC
+  )
+  # 检查组别名称
+  table(mmRNA_harmony2@meta.data$group)
+  # 将 group 列转换为因子类型
+  #mmRNA_harmony2@meta.data$group <- as.factor(mmRNA_harmony2@meta.data$group)
+  print(levels(mmRNA_harmony2@meta.data$group))
+  p <- VlnPlot(
+    mmRNA_harmony2, #mmRNA_harmony,AMs,Hu_SMC,AMs_filtered
+    features = "FURIN", #YWHAB, YWHAG, FKBP2；FKBP1A, FKBP5, YWHAE；YWHAH, YWHAQ, YWHAZ；SFN;NLRP3,IL18，IL1B,HSP90AA1,#PLCG2
+    group.by = "group", 
+    pt.size = 1, #设置0就是去掉点
+    log = FALSE,
+    assay = "RNA",  # 显式指定使用原始 counts 数据 
+  ) + 
+    geom_boxplot(width = 0.5, alpha = 0.6) +
+    stat_summary(
+      fun = "mean",
+      geom = "crossbar",  # 横线表示平均值
+      width = 0.4,        # 横线宽度
+      color = "red"
+    ) +
+    xlab('all cell') + ylab('Expression') + NoLegend() +#Macrophage Cells
+    coord_cartesian(ylim = c(0, 4))  # Y轴范围
+  p

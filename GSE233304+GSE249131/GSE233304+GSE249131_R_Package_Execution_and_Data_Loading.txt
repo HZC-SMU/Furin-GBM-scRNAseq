@@ -1,0 +1,99 @@
+library(ggrepel)
+library(pheatmap)
+library(Seurat)
+library(celldex)
+library(tidydr)
+library(ggplot2)
+library(Seurat)
+library(tidyverse)
+library(Seurat)
+library(celldex)
+library(tidydr)
+library(tidyverse)
+library(Matrix)
+library(stringr)
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+library(SingleR)
+library(clustree)
+library(cowplot)
+library(tidyverse)
+library(SCpubr)
+library(GSVA)
+library(GSEABase)
+library(harmony)
+library(plyr)
+#library(randomcoloR)
+library(ggpubr)
+library(ggplot2)
+library(ggalluvial)
+library(ggplot2)
+library(ggalluvial)
+library(ggplot2)
+library(ComplexHeatmap)
+library(scCustomize)
+
+
+	
+#-------------阳琴GSE233304--------
+#-------------阳琴GSE233304--------                 
+#-------------阳琴GSE233304--------
+#-------------阳琴GSE233304--------
+#-------------阳琴GSE233304--------      
+setwd("E:/13 lou/Desktop/阳琴/GSE233304")
+
+# 读取每个样本（需确保文件名符合10X格式要求）
+read_gbm <- function(path, project_name) {
+  data <- Read10X(data.dir = path)
+  CreateSeuratObject(data, project = project_name)
+}
+
+# 读取八个GBM样本（路径按顺序对应）
+GBM1 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM8244375",
+  "GSM8244375_GBM"
+)
+GBM2 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM7421862",
+  "GSM7421862_GBM"
+)
+GBM3 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM7421865",
+  "GSM7421865_GBM"
+)
+GBM4 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM7421870",
+  "GSM7421870_GBM"
+)
+GBM5 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM7421872",
+  "GSM7421872_GBM"
+)
+GBM6 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM7421874",
+  "GSM7421874_GBM"
+)
+GBM7 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM8244371",
+  "GSM8244371_GBM"
+)
+GBM8 <- read_gbm(
+  "E:/Super LRP/Desktop/阳琴/GSE233304/文件/GSM8244373",
+  "GSM8244373_GBM"
+)
+
+# 合并所有GBM样本
+GBM_merge <- merge(GBM1, y = list(GBM2, GBM3, GBM4, GBM5, GBM6, GBM7, GBM8))
+saveRDS(GBM_merge, "GBM_merge.rds")
+GBM_merge=readRDS("GBM_merge.rds")
+table(GBM_merge@meta.data$orig.ident)
+
+
+# 设置文件路径
+file_path <- "E:/Super LRP/Desktop/阳琴/GSE193525_RAW/Control.rds"
+
+# 读取.rds文件
+Control <- readRDS(file_path)
+mmRNA <- merge(GBM_merge, y = Control)
